@@ -26,8 +26,15 @@ import std/terminal
 {.experimental: "overloadableEnums".}
 
 const
-  ApiBase = "https://gitlab.com/api/v4" # TODO: make this configurable at runtime
+  ApiBase = "/api/v4"
   ConfigDirName = "snippet"
+
+type
+  Globals = object
+    gitlabInstance: string
+
+var
+  globals: Globals
 
 proc getConfigPath(): string =
   getConfigDir() / ConfigDirName
@@ -82,7 +89,7 @@ proc api(endpoint: string; httpMethod = HttpGet; body = ""): string =
       "PRIVATE-TOKEN": readToken(),
     })
     client = newHttpClient(headers = headers)
-    response = client.request(ApiBase & endpoint, httpMethod = httpMethod, body = body)
+    response = client.request(globals.gitlabInstance & ApiBase & endpoint, httpMethod = httpMethod, body = body)
   if not response.code.isOk:
     raise newException(ApiError, $response.code)
   try:
@@ -175,7 +182,8 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
 proc deleteSnippet(id: string) =
   discard api(&"/snippets/{id}", HttpDelete)
 
-proc snippet(update = ""; list = false; delete = ""; login = false; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
+proc snippet(update = ""; list = false; delete = ""; login = false; title = ""; visibility = Public; private = false; gitlabInstance = "https://gitlab.com"; filenames: seq[string]): int =
+  globals.gitlabInstance = gitlabInstance
   if login:
     let token = readPasswordFromStdin("Enter token: ")
     writeLoginToken(token)
