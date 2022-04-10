@@ -21,6 +21,7 @@ import std/os
 import std/sets
 import std/strformat
 import std/strutils
+import std/rdstdin
 
 {.experimental: "overloadableEnums".}
 
@@ -174,10 +175,10 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
 proc deleteSnippet(id: string) =
   discard api(&"/snippets/{id}", HttpDelete)
 
-proc main(update = ""; list = false; delete = ""; login = ""; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
-  # TODO read token via stdin instead
-  if login.len > 0:
-    writeLoginToken(login)
+proc main(update = ""; list = false; delete = ""; login = false; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
+  if login:
+    let token = readLineFromStdin("Enter token: ")
+    writeLoginToken(token)
     stdout.writeLine("OK")
   elif list:
     listSnippets()
