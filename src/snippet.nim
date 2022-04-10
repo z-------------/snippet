@@ -175,7 +175,7 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
 proc deleteSnippet(id: string) =
   discard api(&"/snippets/{id}", HttpDelete)
 
-proc main(update = ""; list = false; delete = ""; login = false; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
+proc snippet(update = ""; list = false; delete = ""; login = false; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
   if login:
     let token = readLineFromStdin("Enter token: ")
     writeLoginToken(token)
@@ -193,4 +193,4 @@ proc main(update = ""; list = false; delete = ""; login = false; title = ""; vis
   QuitSuccess
 
 when isMainModule:
-  dispatch(main)
+  dispatch(snippet)
