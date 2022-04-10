@@ -11,3 +11,4 @@ bin           = @["snippet"]
 # Dependencies
 
 requires "nim >= 1.6.4"
+requires "cligen >= 1.5.23 & < 2.0.0"

@@ -14,20 +14,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import pkg/cligen
 import std/os
-import std/parseopt
 import std/httpclient
 import std/json
 import std/sets
 import std/strutils
 
-# TODO: rework options using cligen
+{.experimental: "overloadableEnums".}
 
 const
   ApiBase = "https://gitlab.com/api/v4"
   ConfigDirName = "snippet"
-
-{.experimental: "overloadableEnums".}
 
 type
   Visibility = enum
@@ -61,7 +59,7 @@ proc api(endpoint: string; httpMethod: HttpMethod; body = ""): JsonNode =
     response = client.request(ApiBase & endpoint, httpMethod = httpMethod, body = body)
   parseJson(response.body)
 
-proc login(loginToken: string) =
+proc writeLoginToken(loginToken: string) =
   createConfigDir()
   let file = open(getTokenPath(), fmWrite)
   try:
@@ -124,41 +122,18 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
   handleError(response)
   $response["id"].getInt
 
-when isMainModule:
+proc main(update = ""; login = ""; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
   # TODO read token via stdin instead
-  var
-    updateId = ""
-    loginToken = ""
-    title = ""
-    visibility = Public
-    filenames: seq[string]
-
-  var optParser = initOptParser(commandLineParams())
-  for kind, key, val in optParser.getOpt():
-    case kind
-    of cmdArgument:
-      filenames.add(key)
-    of cmdShortOption, cmdLongOption:
-      case key
-      of "login":
-        loginToken = val
-      of "u", "update":
-        updateId = val
-      of "title":
-        title = val
-      of "p", "private":
-        visibility = Private
-      of "visibility":
-        visibility = parseEnum[Visibility](val)
-    else:
-      discard
-
-  if loginToken.len > 0:
-    login(loginToken)
+  if login.len > 0:
+    writeLoginToken(login)
     stdout.writeLine("OK")
   else:
     if filenames.len <= 0:
       stderr.writeLine("No filenames provided.")
-      quit(QuitFailure)
-    let id = modifySnippet(updateId, filenames, title, visibility)
+      return QuitFailure
+    let id = modifySnippet(update, filenames, title, if private: Private else: visibility)
     stdout.writeLine("https://gitlab.com/snippets/" & id)
+  QuitSuccess
+
+when isMainModule:
+  dispatch(main)
