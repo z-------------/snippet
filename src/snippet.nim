@@ -71,6 +71,9 @@ proc handleError(response: ApiResponse) =
   if error != "":
     raise newException(ApiError, error)
 
+func isOk(code: HttpCode): bool =
+  not (code.is4xx or code.is5xx)
+
 proc api(endpoint: string; httpMethod = HttpGet; body = ""): string =
   let
     headers = newHttpHeaders({
@@ -79,6 +82,8 @@ proc api(endpoint: string; httpMethod = HttpGet; body = ""): string =
     })
     client = newHttpClient(headers = headers)
     response = client.request(ApiBase & endpoint, httpMethod = httpMethod, body = body)
+  if not response.code.isOk:
+    raise newException(ApiError, $response.code)
   try:
     handleError(response.body.fromJson(ApiResponse))
   except JsonError:
@@ -166,13 +171,18 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
     response = api(endpoint, httpMethod, request).fromJson(ModifySnippetResponse)
   response.webUrl
 
-proc main(update = ""; list = false; login = ""; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
+proc deleteSnippet(id: string) =
+  discard api(&"/snippets/{id}", HttpDelete)
+
+proc main(update = ""; list = false; delete = ""; login = ""; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
   # TODO read token via stdin instead
   if login.len > 0:
     writeLoginToken(login)
     stdout.writeLine("OK")
   elif list:
     listSnippets()
+  elif delete != "":
+    deleteSnippet(delete)
   else:
     if filenames.len <= 0:
       stderr.writeLine("No filenames provided.")
