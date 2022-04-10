@@ -15,24 +15,18 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import pkg/cligen
-import std/os
+import pkg/jsony
 import std/httpclient
-import std/json
+import std/os
 import std/sets
-import std/strutils
 import std/strformat
+import std/strutils
 
 {.experimental: "overloadableEnums".}
 
 const
   ApiBase = "https://gitlab.com/api/v4" # TODO: make this configurable at runtime
   ConfigDirName = "snippet"
-
-type
-  Visibility = enum
-    Private = "private"
-    Internal = "internal"
-    Public = "public"
 
 proc getConfigPath(): string =
   getConfigDir() / ConfigDirName
@@ -50,16 +44,6 @@ proc readToken(): string =
   finally:
     file.close()
 
-proc api(endpoint: string; httpMethod = HttpGet; body = ""): JsonNode =
-  let
-    headers = newHttpHeaders({
-      "Content-Type": "application/json",
-      "PRIVATE-TOKEN": readToken(),
-    })
-    client = newHttpClient(headers = headers)
-    response = client.request(ApiBase & endpoint, httpMethod = httpMethod, body = body)
-  parseJson(response.body)
-
 proc writeLoginToken(loginToken: string) =
   createConfigDir()
   let file = open(getTokenPath(), fmWrite)
@@ -68,24 +52,78 @@ proc writeLoginToken(loginToken: string) =
   finally:
     file.close()
 
-proc handleError(response: JsonNode) =
+type
+  ApiResponse = object
+    message: ApiResponseMessage
+    error: string
+  ApiResponseMessage = object
+    error: string
+  ApiError = object of CatchableError
+
+proc handleError(response: ApiResponse) =
   let error =
-    if response.hasKey("error"):
-      response["error"].getStr
-    elif response.hasKey("message") and response["message"].hasKey("error"):
-      response["message"]["error"].getStr
+    if response.error != "":
+      response.error
+    elif response.message.error != "":
+      response.message.error
     else:
       ""
   if error != "":
-    raise newException(CatchableError, error)
+    raise newException(ApiError, error)
+
+proc api(endpoint: string; httpMethod = HttpGet; body = ""): string =
+  let
+    headers = newHttpHeaders({
+      "Content-Type": "application/json",
+      "PRIVATE-TOKEN": readToken(),
+    })
+    client = newHttpClient(headers = headers)
+    response = client.request(ApiBase & endpoint, httpMethod = httpMethod, body = body)
+  try:
+    handleError(response.body.fromJson(ApiResponse))
+  except JsonError:
+    discard
+  response.body
+
+proc api(endpoint: string; httpMethod = HttpGet; body: auto): string =
+  api(endpoint, httpMethod, body.toJson())
+
+type
+  ListSnippetsResponse = seq[ListSnippetsItem]
+  ListSnippetsItem = object
+    webUrl: string
+    title: string
 
 proc listSnippets() =
-  let snippetInfos = api("/snippets")
+  let snippetInfos = api("/snippets").fromJson(ListSnippetsResponse)
   for snippetInfo in snippetInfos:
-    let
-      webUrl = snippetInfo["web_url"].getStr
-      title = snippetInfo["title"].getStr
-    stdout.writeLine([webUrl, title].join(" "))
+    stdout.writeLine([snippetInfo.webUrl, snippetInfo.title].join(" "))
+
+type
+  Visibility = enum
+    Private = "private"
+    Internal = "internal"
+    Public = "public"
+  SnippetResponse = object
+    files: seq[SnippetFile]
+  SnippetFile = object
+    path: string
+  ModifySnippetRequest = object
+    files: seq[ModifySnippetFile]
+    visibility: Visibility
+    title: string
+    id: string
+  ModifySnippetFile = object
+    file_path: string # XXX is there a way to tell jsony to convert to snake_case when serializing?
+    content: string
+    action: ModifySnippetFileAction
+  ModifySnippetFileAction = enum
+    Create = "create"
+    Update = "update"
+    Delete = "delete"
+    Move = "move"
+  ModifySnippetResponse = object
+    webUrl: string
 
 proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visibility: Visibility): string =
   var
@@ -93,43 +131,40 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
     existingFilenames: HashSet[string]
   if isUpdate:
     # need to get the snippet's existing filenames in order to set file action later
-    let snippetInfo = api(&"/snippets/{updateId}")
-    handleError(snippetInfo)
-    for fileInfo in snippetInfo["files"]:
-      existingFilenames.incl(fileInfo["path"].getStr)
+    let snippetInfo = api(&"/snippets/{updateId}").fromJson(SnippetResponse)
+    for fileInfo in snippetInfo.files:
+      existingFilenames.incl(fileInfo.path)
   
-  var requestJson = %*{
-    "files": [],
-    "visibility": $visibility,
-    "title": (if title.len > 0: %title else: %(filenames[0])),
-  }
+  var request = ModifySnippetRequest(
+    visibility: visibility,
+    title: (if title.len > 0: title else: filenames[0]),
+  )
   if isUpdate:
-    requestJson["id"] = %updateId
+    request.id = updateId
 
   for filename in filenames:
     let file = open(filename, fmRead)
     try:
       let fileContent = file.readAll()
-      var fileJson = %*{
-        "file_path": filename,
-        "content": fileContent,
-      }
+      var fileJson = ModifySnippetFile(
+        filePath: filename,
+        content: fileContent,
+      )
       if isUpdate:
-        fileJson["action"] =
+        fileJson.action =
           if filename in existingFilenames:
-            %"update"
+            Update
           else:
-            %"create"
-      requestJson["files"].add(fileJson)
+            Create
+      request.files.add(fileJson)
     finally:
       file.close()
 
   let
     endpoint = "/snippets" & (if isUpdate: "/" & updateId else: "")
     httpMethod = if isUpdate: HttpPut else: HttpPost
-    response = api(endpoint, httpMethod, $requestJson)
-  handleError(response)
-  response["web_url"].getStr
+    response = api(endpoint, httpMethod, request).fromJson(ModifySnippetResponse)
+  response.webUrl
 
 proc main(update = ""; list = false; login = ""; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
   # TODO read token via stdin instead

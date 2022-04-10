@@ -12,3 +12,4 @@ bin           = @["snippet"]
 
 requires "nim >= 1.6.4"
 requires "cligen >= 1.5.23 & < 2.0.0"
+requires "jsony >= 1.1.3 & < 2.0.0"
