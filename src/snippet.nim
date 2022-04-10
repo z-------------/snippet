@@ -21,7 +21,7 @@ import std/os
 import std/sets
 import std/strformat
 import std/strutils
-import std/rdstdin
+import std/terminal
 
 {.experimental: "overloadableEnums".}
 
@@ -177,7 +177,7 @@ proc deleteSnippet(id: string) =
 
 proc snippet(update = ""; list = false; delete = ""; login = false; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
   if login:
-    let token = readLineFromStdin("Enter token: ")
+    let token = readPasswordFromStdin("Enter token: ")
     writeLoginToken(token)
     stdout.writeLine("OK")
   elif list:
