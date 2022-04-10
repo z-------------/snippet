@@ -20,11 +20,12 @@ import std/httpclient
 import std/json
 import std/sets
 import std/strutils
+import std/strformat
 
 {.experimental: "overloadableEnums".}
 
 const
-  ApiBase = "https://gitlab.com/api/v4"
+  ApiBase = "https://gitlab.com/api/v4" # TODO: make this configurable at runtime
   ConfigDirName = "snippet"
 
 type
@@ -49,7 +50,7 @@ proc readToken(): string =
   finally:
     file.close()
 
-proc api(endpoint: string; httpMethod: HttpMethod; body = ""): JsonNode =
+proc api(endpoint: string; httpMethod = HttpGet; body = ""): JsonNode =
   let
     headers = newHttpHeaders({
       "Content-Type": "application/json",
@@ -78,13 +79,21 @@ proc handleError(response: JsonNode) =
   if error != "":
     raise newException(CatchableError, error)
 
+proc listSnippets() =
+  let snippetInfos = api("/snippets")
+  for snippetInfo in snippetInfos:
+    let
+      webUrl = snippetInfo["web_url"].getStr
+      title = snippetInfo["title"].getStr
+    stdout.writeLine([webUrl, title].join(" "))
+
 proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visibility: Visibility): string =
   var
     isUpdate = updateId.len > 0
     existingFilenames: HashSet[string]
   if isUpdate:
     # need to get the snippet's existing filenames in order to set file action later
-    let snippetInfo = api("/snippets/" & updateId, HttpGet)
+    let snippetInfo = api(&"/snippets/{updateId}")
     handleError(snippetInfo)
     for fileInfo in snippetInfo["files"]:
       existingFilenames.incl(fileInfo["path"].getStr)
@@ -120,19 +129,21 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
     httpMethod = if isUpdate: HttpPut else: HttpPost
     response = api(endpoint, httpMethod, $requestJson)
   handleError(response)
-  $response["id"].getInt
+  response["web_url"].getStr
 
-proc main(update = ""; login = ""; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
+proc main(update = ""; list = false; login = ""; title = ""; visibility = Public; private = false; filenames: seq[string]): int =
   # TODO read token via stdin instead
   if login.len > 0:
     writeLoginToken(login)
     stdout.writeLine("OK")
+  elif list:
+    listSnippets()
   else:
     if filenames.len <= 0:
       stderr.writeLine("No filenames provided.")
       return QuitFailure
-    let id = modifySnippet(update, filenames, title, if private: Private else: visibility)
-    stdout.writeLine("https://gitlab.com/snippets/" & id)
+    let snippetUrl = modifySnippet(update, filenames, title, if private: Private else: visibility)
+    stdout.writeLine(snippetUrl)
   QuitSuccess
 
 when isMainModule:
