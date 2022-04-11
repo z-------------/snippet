@@ -21,6 +21,7 @@ import std/os
 import std/sets
 import std/strformat
 import std/strutils
+import std/sugar
 import std/terminal
 
 {.experimental: "overloadableEnums".}
@@ -102,10 +103,14 @@ proc api(endpoint: string; httpMethod = HttpGet; body: auto): string =
   api(endpoint, httpMethod, body.toJson())
 
 type
-  ListSnippetsResponse = seq[ListSnippetsItem]
-  ListSnippetsItem = object
+  ListSnippetsResponse = seq[SnippetInfo]
+  SnippetInfo = object
     webUrl: string
     title: string
+    files: seq[SnippetInfoFile]
+  SnippetInfoFile = object
+    path: string
+    rawUrl: string
 
 proc listSnippets() =
   let snippetInfos = api("/snippets").fromJson(ListSnippetsResponse)
@@ -182,7 +187,27 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
 proc deleteSnippet(id: string) =
   discard api(&"/snippets/{id}", HttpDelete)
 
-proc snippet(update = ""; list = false; delete = ""; login = false; title = ""; visibility = Public; private = false; gitlabInstance = "https://gitlab.com"; filenames: seq[string]): int =
+proc readSnippet(id: string; filePath: string) =
+  if filePath == "":
+    let content = api(&"/snippets/{id}/raw")
+    stdout.write(content)
+  else:
+    let snippetInfo = api(&"/snippets/{id}").fromJson(SnippetInfo)
+    var
+      isFound = false
+      branchName: string
+    for file in snippetInfo.files:
+      if file.path == filePath:
+        isFound = true
+        branchName = file.rawUrl.dup(removeSuffix(filePath)).split('/')[^2]
+        break
+    if isFound:
+      let content = api(&"/snippets/{id}/files/{branchName}/{filePath}/raw")
+      stdout.write(content)
+    else:
+      raise newException(ApiError, &"There is no file named '{filePath}' in the given snippet.")
+
+proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; title = ""; visibility = Public; private = false; gitlabInstance = "https://gitlab.com"; filenames: seq[string]): int =
   globals.gitlabInstance = gitlabInstance
   if login:
     let token = readPasswordFromStdin("Enter token: ")
@@ -192,6 +217,8 @@ proc snippet(update = ""; list = false; delete = ""; login = false; title = ""; 
     listSnippets()
   elif delete != "":
     deleteSnippet(delete)
+  elif read != "":
+    readSnippet(read, if filenames.len >= 1: filenames[0] else: "")
   else:
     if filenames.len <= 0:
       stderr.writeLine("No filenames provided.")
