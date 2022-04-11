@@ -33,6 +33,8 @@ const
 type
   Globals = object
     gitlabInstance: string
+  SnippetError = object of CatchableError
+  ApiError = object of SnippetError
 
 var
   globals: Globals
@@ -67,7 +69,6 @@ type
     error: string
   ApiResponseMessage = object
     error: string
-  ApiError = object of CatchableError
 
 proc handleError(response: ApiResponse) =
   let error =
@@ -144,6 +145,9 @@ type
     webUrl: string
 
 proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visibility: Visibility): string =
+  if filenames.len <= 0:
+    raise newException(SnippetError, "No filename(s) provided.")
+
   var
     isUpdate = updateId.len > 0
     existingFilenames: HashSet[string]
@@ -205,7 +209,7 @@ proc readSnippet(id: string; filePath: string) =
       let content = api(&"/snippets/{id}/files/{branchName}/{filePath}/raw")
       stdout.write(content)
     else:
-      raise newException(ApiError, &"There is no file named '{filePath}' in the given snippet.")
+      raise newException(SnippetError, &"There is no file named '{filePath}' in the given snippet.")
 
 proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; title = ""; visibility = Public; private = false; gitlabInstance = "https://gitlab.com"; filenames: seq[string]): int =
   globals.gitlabInstance = gitlabInstance
@@ -221,13 +225,10 @@ proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; t
     elif read != "":
       readSnippet(read, if filenames.len >= 1: filenames[0] else: "")
     else:
-      if filenames.len <= 0:
-        stderr.writeLine("No filenames provided.")
-        return QuitFailure
       let snippetUrl = modifySnippet(update, filenames, title, if private: Private else: visibility)
       stdout.writeLine(snippetUrl)
     QuitSuccess
-  except ApiError as e:
+  except SnippetError as e:
     stderr.writeLine(e.msg)
     QuitFailure
 
