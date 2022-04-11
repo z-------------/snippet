@@ -234,4 +234,7 @@ proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; t
     QuitFailure
 
 when isMainModule:
+  const NimblePkgVersion {.strDefine.} = "Unknown version"
+  cligen.clCfg.version = NimblePkgVersion
+
   dispatch(snippet)
