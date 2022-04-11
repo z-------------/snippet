@@ -209,23 +209,27 @@ proc readSnippet(id: string; filePath: string) =
 
 proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; title = ""; visibility = Public; private = false; gitlabInstance = "https://gitlab.com"; filenames: seq[string]): int =
   globals.gitlabInstance = gitlabInstance
-  if login:
-    let token = readPasswordFromStdin("Enter token: ")
-    writeLoginToken(token)
-    stdout.writeLine("OK")
-  elif list:
-    listSnippets()
-  elif delete != "":
-    deleteSnippet(delete)
-  elif read != "":
-    readSnippet(read, if filenames.len >= 1: filenames[0] else: "")
-  else:
-    if filenames.len <= 0:
-      stderr.writeLine("No filenames provided.")
-      return QuitFailure
-    let snippetUrl = modifySnippet(update, filenames, title, if private: Private else: visibility)
-    stdout.writeLine(snippetUrl)
-  QuitSuccess
+  try:
+    if login:
+      let token = readPasswordFromStdin("Enter token: ")
+      writeLoginToken(token)
+      stdout.writeLine("OK")
+    elif list:
+      listSnippets()
+    elif delete != "":
+      deleteSnippet(delete)
+    elif read != "":
+      readSnippet(read, if filenames.len >= 1: filenames[0] else: "")
+    else:
+      if filenames.len <= 0:
+        stderr.writeLine("No filenames provided.")
+        return QuitFailure
+      let snippetUrl = modifySnippet(update, filenames, title, if private: Private else: visibility)
+      stdout.writeLine(snippetUrl)
+    QuitSuccess
+  except ApiError as e:
+    stderr.writeLine(e.msg)
+    QuitFailure
 
 when isMainModule:
   dispatch(snippet)
