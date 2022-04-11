@@ -18,6 +18,7 @@ import pkg/cligen
 import pkg/jsony
 import std/httpclient
 import std/os
+import std/sequtils
 import std/sets
 import std/strformat
 import std/strutils
@@ -209,7 +210,7 @@ proc readSnippet(id: string; filePath: string) =
       let content = api(&"/snippets/{id}/files/{branchName}/{filePath}/raw")
       stdout.write(content)
     else:
-      raise newException(SnippetError, &"There is no file named '{filePath}' in the given snippet.")
+      raise newException(SnippetError, &"There is no file named '{filePath}' in the snippet. Available files are: " & snippetInfo.files.map(file => file.path).join(", "))
 
 proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; title = ""; visibility = Public; private = false; gitlabInstance = "https://gitlab.com"; filenames: seq[string]): int =
   globals.gitlabInstance = gitlabInstance
