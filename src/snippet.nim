@@ -25,6 +25,7 @@ import std/strformat
 import std/strutils
 import std/sugar
 import std/terminal
+import std/uri
 
 {.experimental: "overloadableEnums".}
 
@@ -209,7 +210,7 @@ proc readSnippet(id: string; filePath: string) =
         branchName = file.rawUrl.dup(removeSuffix(filePath)).split('/')[^2].some
         break
     if branchName.isSome:
-      let content = api(&"/snippets/{id}/files/{branchName.get}/{filePath}/raw")
+      let content = api(&"/snippets/{id}/files/{branchName.get}/{filePath.encodeUrl()}/raw")
       stdout.write(content)
     else:
       raise newException(SnippetError, &"There is no file named '{filePath}' in the snippet. Available files are: " & snippetInfo.files.map(file => file.path).join(", "))
