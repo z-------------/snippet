@@ -145,7 +145,7 @@ type
   ModifySnippetResponse = object
     webUrl: string
 
-proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visibility: Visibility): string =
+proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visibility: Visibility) =
   if filenames.len <= 0:
     raise newException(SnippetError, "No filename(s) provided.")
 
@@ -157,7 +157,7 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
     let snippetInfo = api(&"/snippets/{updateId}").fromJson(SnippetResponse)
     for fileInfo in snippetInfo.files:
       existingFilenames.incl(fileInfo.path)
-  
+
   var request = ModifySnippetRequest(
     visibility: visibility,
     title: (if title.len > 0: title else: filenames[0]),
@@ -187,7 +187,7 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
     endpoint = "/snippets" & (if isUpdate: "/" & updateId else: "")
     httpMethod = if isUpdate: HttpPut else: HttpPost
     response = api(endpoint, httpMethod, request).fromJson(ModifySnippetResponse)
-  response.webUrl
+  stdout.writeLine(response.webUrl)
 
 proc deleteSnippet(id: string) =
   discard api(&"/snippets/{id}", HttpDelete)
@@ -226,8 +226,7 @@ proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; t
     elif read != "":
       readSnippet(read, if filenames.len >= 1: filenames[0] else: "")
     else:
-      let snippetUrl = modifySnippet(update, filenames, title, if private: Private else: visibility)
-      stdout.writeLine(snippetUrl)
+      modifySnippet(update, filenames, title, if private: Private else: visibility)
     QuitSuccess
   except SnippetError as e:
     stderr.writeLine(e.msg)
