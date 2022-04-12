@@ -51,9 +51,12 @@ proc getTokenPath(): string =
   getConfigPath() / ".token"
 
 proc readToken(): string =
-  let file = open(getTokenPath(), fmRead)
+  var file: File
   try:
+    file = open(getTokenPath(), fmRead)
     result = file.readLine()
+  except IOError:
+    raise newException(SnippetError, "Failed to read login token. Please use --login.")
   finally:
     file.close()
 
