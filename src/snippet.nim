@@ -17,6 +17,7 @@
 import pkg/cligen
 import pkg/jsony
 import std/httpclient
+import std/options
 import std/os
 import std/sequtils
 import std/sets
@@ -199,15 +200,13 @@ proc readSnippet(id: string; filePath: string) =
   else:
     let snippetInfo = api(&"/snippets/{id}").fromJson(SnippetInfo)
     var
-      isFound = false
-      branchName: string
+      branchName: Option[string]
     for file in snippetInfo.files:
       if file.path == filePath:
-        isFound = true
-        branchName = file.rawUrl.dup(removeSuffix(filePath)).split('/')[^2]
+        branchName = file.rawUrl.dup(removeSuffix(filePath)).split('/')[^2].some
         break
-    if isFound:
-      let content = api(&"/snippets/{id}/files/{branchName}/{filePath}/raw")
+    if branchName.isSome:
+      let content = api(&"/snippets/{id}/files/{branchName.get}/{filePath}/raw")
       stdout.write(content)
     else:
       raise newException(SnippetError, &"There is no file named '{filePath}' in the snippet. Available files are: " & snippetInfo.files.map(file => file.path).join(", "))
