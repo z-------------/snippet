@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import pkg/cligen
 import pkg/jsony
 import std/httpclient
 import std/options
@@ -42,6 +41,8 @@ type
 var
   globals: Globals
 
+# token helpers #
+
 proc getConfigPath(): string =
   getConfigDir() / ConfigDirName
 
@@ -68,6 +69,31 @@ proc writeLoginToken(loginToken: string) =
     file.write(loginToken)
   finally:
     file.close()
+
+# serialization #
+
+template dumpHook(s: var string, v: object) =
+  ## Omits fields whose value is a none Option
+  when compiles(for k, e in v.pairs: discard):
+    jsony.dumpHook(s, v)
+  else:
+    s.add '{'
+    var i = 0
+    for k, e in v.fieldPairs:
+      let shouldInclude =
+        when e is Option:
+          e.isSome
+        else:
+          true
+      if shouldInclude:
+        if i > 0:
+          s.add ','
+        s.add k.toJson() & ":"
+        s.dumpHook(e)
+        inc i
+    s.add '}'
+
+# api helper #
 
 type
   ApiResponse = object
@@ -109,6 +135,8 @@ proc api(endpoint: string; httpMethod = HttpGet; body = ""): string =
 proc api(endpoint: string; httpMethod = HttpGet; body: auto): string =
   api(endpoint, httpMethod, body.toJson())
 
+# subcommands #
+
 type
   ListSnippetsResponse = seq[SnippetInfo]
   SnippetInfo = object
@@ -135,9 +163,9 @@ type
     path: string
   ModifySnippetRequest = object
     files: seq[ModifySnippetFile]
-    visibility: Visibility
-    title: string
-    id: string
+    visibility: Option[Visibility]
+    title: Option[string]
+    id: Option[string]
   ModifySnippetFile = object
     file_path: string # XXX is there a way to tell jsony to convert to snake_case when serializing?
     content: string
@@ -150,7 +178,7 @@ type
   ModifySnippetResponse = object
     webUrl: string
 
-proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visibility: Visibility) =
+proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visibility: Option[Visibility]) =
   if filenames.len <= 0:
     raise newException(SnippetError, "No filename(s) provided.")
 
@@ -163,12 +191,14 @@ proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visi
     for fileInfo in snippetInfo.files:
       existingFilenames.incl(fileInfo.path)
 
-  var request = ModifySnippetRequest(
-    visibility: visibility,
-    title: (if title.len > 0: title else: filenames[0]),
-  )
+  var request: ModifySnippetRequest
+  request.visibility = visibility
+  if title != "":
+    request.title = title.some
+  elif not isUpdate:
+    request.title = filenames[0].some
   if isUpdate:
-    request.id = updateId
+    request.id = updateId.some
 
   for filename in filenames:
     let file = open(filename, fmRead)
@@ -215,7 +245,15 @@ proc readSnippet(id: string; filePath: string) =
     else:
       raise newException(SnippetError, &"There is no file named '{filePath}' in the snippet. Available files are: " & snippetInfo.files.map(file => file.path).join(", "))
 
-proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; title = ""; visibility = Public; private = false; gitlabInstance = "https://gitlab.com"; filenames: seq[string]): int =
+# main #
+
+proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; title = ""; visibility = Visibility.none; private = false; gitlabInstance = "https://gitlab.com"; filenames: seq[string]): int =
+  let visibility =
+    if private:
+      Private.some
+    else:
+      visibility
+
   globals.gitlabInstance = gitlabInstance
   try:
     if login:
@@ -229,14 +267,27 @@ proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; t
     elif read != "":
       readSnippet(read, if filenames.len >= 1: filenames[0] else: "")
     else:
-      modifySnippet(update, filenames, title, if private: Private else: visibility)
+      modifySnippet(update, filenames, title, visibility)
     QuitSuccess
   except SnippetError as e:
     stderr.writeLine(e.msg)
     QuitFailure
 
 when isMainModule:
+  import pkg/cligen
+  import pkg/cligen/argcvt
+
   const NimblePkgVersion {.strDefine.} = "Unknown version"
   cligen.clCfg.version = NimblePkgVersion
+
+  func argParse[T](dest: var Option[T]; default: Option[T]; a: var ArgcvtParams): bool =
+    var optVal: T
+    if not argParse(optVal, T.default, a):
+      return false
+    dest = optVal.some
+    true
+
+  func argHelp[T](default: Option[T]; a: var ArgcvtParams): seq[string] =
+    @[a.argKeys, "Option[" & $T & "]", $default]
 
   dispatch(snippet)
