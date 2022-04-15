@@ -72,26 +72,8 @@ proc writeLoginToken(loginToken: string) =
 
 # serialization #
 
-template dumpHook(s: var string, v: object) =
-  ## Omits fields whose value is a none Option
-  when compiles(for k, e in v.pairs: discard):
-    jsony.dumpHook(s, v)
-  else:
-    s.add '{'
-    var i = 0
-    for k, e in v.fieldPairs:
-      let shouldInclude =
-        when e is Option:
-          e.isSome
-        else:
-          true
-      if shouldInclude:
-        if i > 0:
-          s.add ','
-        s.add k.toJson() & ":"
-        s.dumpHook(e)
-        inc i
-    s.add '}'
+func includeHook[T](v: Option[T]): bool =
+  v.isSome
 
 # api helper #
 
