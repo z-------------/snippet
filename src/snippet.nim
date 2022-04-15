@@ -120,25 +120,33 @@ proc api(endpoint: string; httpMethod = HttpGet; body: auto): string =
 # subcommands #
 
 type
+  Visibility = enum
+    Private = "private"
+    Internal = "internal"
+    Public = "public"
+
+type
   ListSnippetsResponse = seq[SnippetInfo]
   SnippetInfo = object
     webUrl: string
     title: string
     files: seq[SnippetInfoFile]
+    visibility: Visibility
   SnippetInfoFile = object
     path: string
     rawUrl: string
 
 proc listSnippets() =
-  let snippetInfos = api("/snippets").fromJson(ListSnippetsResponse)
-  for snippetInfo in snippetInfos:
-    stdout.writeLine([snippetInfo.webUrl, snippetInfo.title].join(" "))
+  let snippets = api("/snippets").fromJson(ListSnippetsResponse)
+  for snippet in snippets:
+    let visibilityStr =
+      if snippet.visibility == Public:
+        ""
+      else:
+        &" ({snippet.visibility})"
+    stdout.writeLine(&"{snippet.webUrl} {snippet.title}{visibilityStr}")
 
 type
-  Visibility = enum
-    Private = "private"
-    Internal = "internal"
-    Public = "public"
   SnippetResponse = object
     files: seq[SnippetFile]
   SnippetFile = object
