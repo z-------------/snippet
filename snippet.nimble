@@ -12,4 +12,4 @@ bin           = @["snippet"]
 
 requires "nim >= 1.6.4"
 requires "cligen >= 1.5.23 & < 2.0.0"
-requires "https://github.com/z-------------/jsony >= 1.2.0 & < 2.0.0"
+requires "https://github.com/z-------------/jsony < 2.0.0"
