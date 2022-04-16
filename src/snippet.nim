@@ -169,12 +169,12 @@ type
     webUrl: string
 
 proc modifySnippet(updateId: string; filenames: seq[string]; title: string; visibility: Option[Visibility]) =
-  if filenames.len <= 0:
+  let isUpdate = updateId != ""
+
+  if not isUpdate and filenames.len == 0:
     raise newException(SnippetError, "No filename(s) provided.")
 
-  var
-    isUpdate = updateId.len > 0
-    existingFilenames: HashSet[string]
+  var existingFilenames: HashSet[string]
   if isUpdate:
     # need to get the snippet's existing filenames in order to set file action later
     let snippetInfo = api(&"/snippets/{updateId}").fromJson(SnippetResponse)
