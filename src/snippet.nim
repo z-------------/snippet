@@ -192,6 +192,6 @@ when isMainModule:
     true
 
   func argHelp[T](default: Option[T]; a: var ArgcvtParams): seq[string] =
-    @[a.argKeys, "Option[" & $T & "]", $default]
+    @[a.argKeys, $T, if default.isSome: $default.get else: ""]
 
   dispatch(snippet)
