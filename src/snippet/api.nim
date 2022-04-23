@@ -16,10 +16,12 @@
 # along with snippet.  If not, see <http://www.gnu.org/licenses/>.
 
 import ./types
+import ./json
 import ./tokens
 import pkg/jsony
-import std/options
 import std/httpclient
+
+export json
 
 const
   ApiBase = "/api/v4"
@@ -36,9 +38,6 @@ type
 
 var
   config: Config
-
-func includeHook*[T](v: Option[T]): bool =
-  v.isSome
 
 proc handleError(response: ApiResponse) =
   let error =

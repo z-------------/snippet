@@ -158,7 +158,7 @@ proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; t
     else:
       visibility
 
-  api.setGitlabInstance(gitlabInstance)
+  setGitlabInstance(gitlabInstance)
   try:
     if login:
       let token = readPasswordFromStdin("Enter token: ")
