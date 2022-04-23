@@ -14,6 +14,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import ./snippet/types
+import ./snippet/api
+import ./snippet/tokens
 import pkg/jsony
 import std/httpclient
 import std/options
@@ -27,95 +30,6 @@ import std/terminal
 import std/uri
 
 {.experimental: "overloadableEnums".}
-
-const
-  ApiBase = "/api/v4"
-  ConfigDirName = "snippet"
-
-type
-  Globals = object
-    gitlabInstance: string
-  SnippetError = object of CatchableError
-  ApiError = object of SnippetError
-
-var
-  globals: Globals
-
-# token helpers #
-
-proc getConfigPath(): string =
-  getConfigDir() / ConfigDirName
-
-proc createConfigDir() =
-  createDir(getConfigPath())
-
-proc getTokenPath(): string =
-  getConfigPath() / ".token"
-
-proc readToken(): string =
-  var file: File
-  try:
-    file = open(getTokenPath(), fmRead)
-    result = file.readLine()
-  except IOError:
-    raise newException(SnippetError, "Failed to read login token. Please use --login.")
-  finally:
-    file.close()
-
-proc writeLoginToken(loginToken: string) =
-  createConfigDir()
-  let file = open(getTokenPath(), fmWrite)
-  try:
-    file.write(loginToken)
-  finally:
-    file.close()
-
-# serialization #
-
-func includeHook[T](v: Option[T]): bool =
-  v.isSome
-
-# api helper #
-
-type
-  ApiResponse = object
-    message: ApiResponseMessage
-    error: string
-  ApiResponseMessage = object
-    error: string
-
-proc handleError(response: ApiResponse) =
-  let error =
-    if response.error != "":
-      response.error
-    elif response.message.error != "":
-      response.message.error
-    else:
-      ""
-  if error != "":
-    raise newException(ApiError, error)
-
-func isOk(code: HttpCode): bool =
-  not (code.is4xx or code.is5xx)
-
-proc api(endpoint: string; httpMethod = HttpGet; body = ""): string =
-  let
-    headers = newHttpHeaders({
-      "Content-Type": "application/json",
-      "PRIVATE-TOKEN": readToken(),
-    })
-    client = newHttpClient(headers = headers)
-    response = client.request(globals.gitlabInstance & ApiBase & endpoint, httpMethod = httpMethod, body = body)
-  if not response.code.isOk:
-    raise newException(ApiError, $response.code)
-  try:
-    handleError(response.body.fromJson(ApiResponse))
-  except JsonError:
-    discard
-  response.body
-
-proc api(endpoint: string; httpMethod = HttpGet; body: auto): string =
-  api(endpoint, httpMethod, body.toJson())
 
 # subcommands #
 
@@ -244,7 +158,7 @@ proc snippet(update = ""; list = false; delete = ""; read = ""; login = false; t
     else:
       visibility
 
-  globals.gitlabInstance = gitlabInstance
+  api.setGitlabInstance(gitlabInstance)
   try:
     if login:
       let token = readPasswordFromStdin("Enter token: ")
