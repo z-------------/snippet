@@ -52,7 +52,7 @@ proc handleError(response: ApiResponse) =
     raise newException(ApiError, error)
 
 func isOk(code: HttpCode): bool =
-  not (code.is4xx or code.is5xx)
+  code.is2xx
 
 proc api*(endpoint: string; httpMethod = HttpGet; body = ""): string =
   assert config.gitlabInstance != ""
